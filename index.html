@@ -1,0 +1,725 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>灵巧手姿态拟合测评系统 · A/B 双窗口</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#151a22; --panel-2:#1b212b; --line:#242c38;
+    --ink:#e6ebf2; --ink-2:#9aa6b6; --ink-3:#6b7787;
+    --cyan:#38bdf8; --blue:#3b82f6; --green:#22c55e; --amber:#f59e0b; --red:#ef4444;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .app{max-width:1320px;margin:0 auto;padding:22px 22px 40px}
+
+  /* ---------- 顶栏 ---------- */
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .logo{display:flex;align-items:center;gap:10px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .dot.off{background:var(--ink-3);box-shadow:none}
+  h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.01em}
+  .sub{font-size:12px;color:var(--ink-3);margin-left:2px}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--line);background:var(--panel-2);color:var(--ink);
+    padding:8px 14px;border-radius:9px;font-size:13px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .btn:hover{background:#232b37;border-color:#2f3a49}
+  .btn.primary{background:linear-gradient(180deg,#2f6fed,#2159c9);border-color:#2b62d8}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ---------- 双窗口 ---------- */
+  .windows{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .win{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+  .win-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border-radius:6px}
+  .tag.a{background:rgba(56,189,248,.14);color:var(--cyan)}
+  .tag.b{background:rgba(139,124,246,.16);color:#a78bfa}
+  .win-head b{font-size:13.5px;font-weight:600}
+  .win-head .hint{font-size:11.5px;color:var(--ink-3);margin-left:auto}
+  .stage{position:relative;aspect-ratio:4/3;background:#0b0e13}
+  .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .stage video{object-fit:cover;transform:scaleX(-1)}
+  .stage canvas{transform:scaleX(-1)}
+  .stage.no-flip canvas{transform:none}
+  .stage-note{position:absolute;left:14px;bottom:12px;font-size:11.5px;color:var(--ink-3);
+    background:rgba(10,14,20,.72);padding:4px 9px;border-radius:7px;backdrop-filter:blur(4px)}
+  .stage-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:24px;font-size:13px;color:var(--ink-3);pointer-events:none}
+  .win-foot{display:flex;gap:18px;padding:10px 16px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .win-foot b{color:var(--ink);font-family:var(--mono);font-weight:600}
+
+  /* ---------- 评价区 ---------- */
+  .eval{display:grid;grid-template-columns:300px 1fr;gap:16px;margin-top:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  .score-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  .score-num{font-family:var(--mono);font-size:56px;font-weight:700;line-height:1;letter-spacing:-.02em}
+  .score-num small{font-size:18px;color:var(--ink-3);font-weight:500}
+  .score-label{font-size:12px;color:var(--ink-2)}
+  .grade{font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600}
+  .ring{position:absolute;inset:0}
+
+  .channels{display:flex;flex-direction:column;gap:9px}
+  .ch{display:grid;grid-template-columns:64px 1fr 78px;align-items:center;gap:10px;font-size:12px}
+  .ch .name{color:var(--ink-2)}
+  .ch .track{position:relative;height:16px;background:#0f141c;border-radius:6px;overflow:hidden;border:1px solid #1f2733}
+  .ch .fillA{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(56,189,248,.35),rgba(56,189,248,.75));border-radius:5px 0 0 5px}
+  .ch .fillB{position:absolute;left:0;top:0;bottom:4px;background:linear-gradient(90deg,rgba(167,139,250,.5),rgba(167,139,250,.9));border-radius:5px 0 0 5px;mix-blend-mode:screen}
+  .ch .val{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);text-align:right;white-space:nowrap}
+  .ch .val em{color:var(--red);font-style:normal}
+
+  /* ---------- 控制 + 记录 ---------- */
+  .bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .card h3{font-size:13.5px;margin:0 0 12px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .card h3::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--blue);display:inline-block}
+  .row{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:12.5px;color:var(--ink-2)}
+  .row:last-child{margin-bottom:0}
+  .row label{min-width:92px}
+  input[type=range]{flex:1;accent-color:var(--blue)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:transparent;border:0;color:var(--ink-2);padding:6px 13px;font-size:12.5px;cursor:pointer}
+  .seg button.on{background:#243044;color:#fff}
+  .val-pill{font-family:var(--mono);font-size:12px;color:var(--ink);min-width:44px;text-align:right}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--ink-3);font-weight:500;font-size:11.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:7px 8px;border-bottom:1px solid #1c232d;font-family:var(--mono);color:var(--ink-2)}
+  td.ok{color:var(--green)} td.mid{color:var(--amber)} td.bad{color:var(--red)}
+  .empty{color:var(--ink-3);font-size:12.5px;text-align:center;padding:26px 0}
+
+  footer{margin-top:26px;font-size:11.5px;color:var(--ink-3);line-height:1.9}
+  footer b{color:var(--ink-2)}
+  .formula{font-family:var(--mono);color:var(--cyan);background:#11161e;padding:2px 7px;border-radius:5px}
+
+  @media (max-width:980px){
+    .windows,.eval,.bottom{grid-template-columns:1fr}
+    .score-num{font-size:44px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo"><span class="dot off" id="statusDot"></span>
+      <h1>灵巧手姿态拟合测评系统</h1>
+      <span class="sub">A 窗口真实人手 ｜ B 窗口仿真手 ｜ 同步驱动 · 实时打分</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="btnCam">启动摄像头</button>
+    <button class="btn" id="btnDemo">演示模式</button>
+    <button class="btn" id="btnRecord">记录一条</button>
+    <button class="btn ghost" id="btnCsv">导出 CSV</button>
+  </header>
+
+  <div class="windows">
+    <div class="win">
+      <div class="win-head"><span class="tag a">窗口 A</span><b>真实人手 · 关键点识别</b>
+        <span class="hint" id="hintA">等待启动</span></div>
+      <div class="stage" id="stageA">
+        <video id="video" playsinline muted></video>
+        <canvas id="cvA"></canvas>
+        <div class="stage-center" id="noteA">点击「启动摄像头」开始采集<br />未接摄像头时可先用「演示模式」查看效果</div>
+        <div class="stage-note" id="tagA" style="display:none">MediaPipe Hands · 21 关键点</div>
+      </div>
+      <div class="win-foot">
+        <span>帧率 <b id="fps">--</b> fps</span>
+        <span>手部置信 <b id="conf">--</b></span>
+        <span>数据源 <b id="srcLabel">未启动</b></span>
+      </div>
+    </div>
+
+    <div class="win">
+      <div class="win-head"><span class="tag b">窗口 B</span><b>仿真手 · 同步位姿</b>
+        <span class="hint" id="hintB">6 自由度映射</span></div>
+      <div class="stage no-flip" id="stageB">
+        <canvas id="cvB"></canvas>
+        <div class="stage-note">虚线 = 人手目标姿态　｜　实线 = 仿真手实际姿态</div>
+      </div>
+      <div class="win-foot">
+        <span>驱动方式 <b id="driveMode">关节角映射</b></span>
+        <span>自由度 <b id="dofLabel">6 DOF</b></span>
+        <span>同步延迟 <b id="latency">--</b> ms</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="eval">
+    <div class="card score-wrap">
+      <div class="score-label">姿态拟合度</div>
+      <div class="score-num" id="scoreNum">--<small>/100</small></div>
+      <div class="grade" id="grade" style="background:#243044;color:var(--ink-2)">等待数据</div>
+      <div class="score-label" style="font-size:11px">S = 100 × (1 − 平均关节角误差 / 90°)</div>
+    </div>
+    <div class="card">
+      <h3>六通道关节角对照（度）</h3>
+      <div class="channels" id="channels"></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card">
+      <h3>测评参数</h3>
+      <div class="row">
+        <label>仿真手自由度</label>
+        <div class="seg" id="segDof">
+          <button data-dof="6" class="on">6 DOF（每指 3 关节）</button>
+          <button data-dof="5">5 DOF（每指 1 关节）</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>控制量化</label>
+        <input type="range" id="quant" min="0" max="12" step="1" value="0" />
+        <span class="val-pill" id="quantV">0°</span>
+      </div>
+      <div class="row">
+        <label>平滑滤波</label>
+        <input type="range" id="smooth" min="0" max="90" step="5" value="45" />
+        <span class="val-pill" id="smoothV">0.45</span>
+      </div>
+      <div class="row" style="color:var(--ink-3);font-size:11.5px;line-height:1.7">
+        量化值模拟低成本舵机的角度分辨率；数值越大，仿真手能表达的姿态越少，拟合度越低。
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>实验记录 <span style="font-size:11.5px;color:var(--ink-3);font-weight:400" id="recCount">0 条</span></h3>
+      <table>
+        <thead><tr><th>#</th><th>时间</th><th>自由度</th><th>量化</th><th>拟合度</th><th>平均误差</th></tr></thead>
+        <tbody id="recBody"><tr><td colspan="6" class="empty">还没有记录，调整到手势稳定后点「记录一条」</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    <b>指标定义：</b>六通道 = 五指屈曲角（MCP+PIP+DIP 三段求和归一化）+ 拇指对掌角。
+    单通道误差 = |人手角 − 仿真手角|，平均误差取六通道均值；
+    <span class="formula">S = 100 × (1 − 平均误差 / 90°)</span>，分档：≥85 优、70—85 良、60—70 合格、&lt;60 不合格。<br />
+    <b>使用方法：</b>① 启动摄像头并把手掌朝向镜头（正对、距离 40—60 cm）；② 依次做 10 个标准手势，每个手势保持 2 秒；③ 点「记录一条」，切换自由度/量化参数再记录；④ 导出 CSV 写进报告。<br />
+    <b>已知限制：</b>MediaPipe 需联网加载模型（CDN），摄像头需在 <span class="formula">localhost</span> 或 https 下才能打开；拇指被遮挡时关键点会跳变，属正常现象，可在报告中作为误差来源说明。
+  </footer>
+</div>
+
+<script>
+/* ===================== 基础工具 ===================== */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const D2R = Math.PI / 180;
+
+const state = {
+  mode: 'idle',          // idle | cam | demo
+  running: false,
+  dof: 6,
+  quant: 0,
+  smooth: 0.45,
+  targets: null,         // 人手（窗口 A）六通道屈曲角，单位度
+  sim: null,             // 仿真手（窗口 B）六通道角度
+  filters: null,
+  score: null,
+  meanErr: null,
+  records: [],
+  fps: 0,
+  conf: 0,
+  latency: 0
+};
+
+const CHANNEL_NAMES = ['拇指', '食指', '中指', '无名指', '小指'];
+
+/* ===================== 手部几何绘制 ===================== */
+/* 用前向运动学在画布上画一只“标准视角”的手：
+   fingers[i] = {mcp, pip, dip} 单位度（屈曲角），thumb = {opp} */
+const FINGER_LAYOUT = [
+  { name: 'index',  dx: -0.150, dy:  0.015, base: -97, spread: -6, curl:  1.00, len: [0.098, 0.068, 0.050] },
+  { name: 'middle', dx: -0.048, dy: -0.018, base: -91, spread:  0, curl:  0.28, len: [0.108, 0.074, 0.054] },
+  { name: 'ring',   dx:  0.052, dy: -0.008, base: -85, spread:  5, curl: -0.48, len: [0.098, 0.070, 0.050] },
+  { name: 'pinky',  dx:  0.150, dy:  0.028, base: -77, spread:  9, curl: -1.00, len: [0.080, 0.058, 0.044] }
+];
+
+function drawHand(ctx, W, H, pose, opt) {
+  const u = Math.min(W, H);
+  const cx = W * 0.5, cy = H * 0.5;
+  const palmY = cy + u * 0.06;
+  const color = opt.color, width = opt.width, dashed = opt.dashed, alpha = opt.alpha === undefined ? 1 : opt.alpha;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (dashed) ctx.setLineDash([6, 7]);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+
+  const wristL = [cx - u * 0.105, palmY + u * 0.115];
+  const wristR = [cx + u * 0.140, palmY + u * 0.095];
+  const thumbBase = [cx - u * 0.170, palmY + u * 0.015];
+  const mcpPts = FINGER_LAYOUT.map(f => [cx + f.dx * u, palmY - u * 0.13 + f.dy * u]);
+
+  // 手掌轮廓：左腕 → 拇指根 → 四个指根 → 右腕
+  ctx.beginPath();
+  ctx.moveTo(wristL[0], wristL[1]);
+  ctx.lineTo(thumbBase[0], thumbBase[1]);
+  mcpPts.forEach(pt => ctx.lineTo(pt[0], pt[1]));
+  ctx.lineTo(wristR[0], wristR[1]);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.globalAlpha = alpha * 0.10;
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+
+  // 拇指：两段，opp = 对掌角
+  (function drawThumb() {
+    const opp = pose.thumb && pose.thumb.opp ? pose.thumb.opp : 0;
+    const bx = thumbBase[0], by = thumbBase[1];
+    const a0 = (-155 + opp * 0.45) * D2R;
+    const l1 = u * 0.098, l2 = u * 0.066;
+    const p1x = bx + Math.cos(a0) * l1, p1y = by + Math.sin(a0) * l1;
+    const a1 = a0 + (22 + opp * 0.75) * D2R;
+    const p2x = p1x + Math.cos(a1) * l2, p2y = p1y + Math.sin(a1) * l2;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(p2x, p2y, width * 1.05, 0, Math.PI * 2); ctx.fill();
+  })();
+
+  // 四指：三段，屈曲程度 c 决定每段摆动量，指尖向掌心汇聚
+  FINGER_LAYOUT.forEach(function (f, i) {
+    const p = pose.fingers[i] || { mcp: 0, pip: 0, dip: 0 };
+    const c = Math.min((p.mcp + p.pip + p.dip) / 210, 1.15);
+    let x = mcpPts[i][0], y = mcpPts[i][1];
+    const baseA = (f.base + f.spread) * D2R;
+    const bends = [30, 72, 122];
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    bends.forEach(function (k, j) {
+      const a = baseA + c * k * f.curl * D2R;
+      x += Math.cos(a) * f.len[j] * u;
+      y += Math.sin(a) * f.len[j] * u;
+      ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, width * 1.05, 0, Math.PI * 2); ctx.fill();
+  });
+
+  ctx.restore();
+}
+/* ===================== 关节角计算 ===================== */
+const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+              [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const FINGER_IDX = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]];
+
+function angleAt(a, b, c, aspect) {
+  const v1 = [(a.x - b.x) * aspect, a.y - b.y];
+  const v2 = [(c.x - b.x) * aspect, c.y - b.y];
+  const n1 = Math.hypot(v1[0], v1[1]) || 1e-6, n2 = Math.hypot(v2[0], v2[1]) || 1e-6;
+  let cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2);
+  cos = clamp(cos, -1, 1);
+  return Math.acos(cos) * 180 / Math.PI;
+}
+
+/* 由 21 个关键点解出六通道屈曲角 */
+function poseFromLandmarks(lm, aspect) {
+  const fingers = [];
+  for (let i = 1; i < 5; i++) {           // 食指~小指
+    const [mcpI, pipI, dipI, tipI] = FINGER_IDX[i];
+    const mcp = Math.max(0, 180 - angleAt(lm[0], lm[mcpI], lm[pipI], aspect));
+    const pip = Math.max(0, 180 - angleAt(lm[mcpI], lm[pipI], lm[dipI], aspect));
+    const dip = Math.max(0, 180 - angleAt(lm[pipI], lm[dipI], lm[tipI], aspect));
+    fingers.push({ mcp: Math.min(mcp, 110), pip: Math.min(pip, 120), dip: Math.min(dip, 100) });
+  }
+  // 拇指：对掌角用“拇指尖到小指根”的相对距离衡量
+  const [tM, tP, tD, tT] = FINGER_IDX[0];
+  const thumbCurl = Math.max(0, 180 - angleAt(lm[tM], lm[tP], lm[tT], aspect));
+  const palmSpan = Math.hypot((lm[5].x - lm[17].x) * aspect, lm[5].y - lm[17].y) || 1e-6;
+  const thumbReach = Math.hypot((lm[4].x - lm[17].x) * aspect, lm[4].y - lm[17].y) / palmSpan;
+  const opp = clamp(thumbCurl * 0.5 + clamp(1.6 - thumbReach * 1.5, 0, 1) * 90, 0, 120);
+  return { thumb: { opp }, fingers };
+}
+
+/* 仿真手映射：限幅 + 量化，模拟真实器件的表达力约束 */
+function mapToSim(pose) {
+  const q = v => state.quant > 0 ? Math.round(v / state.quant) * state.quant : v;
+  if (state.dof === 6) {
+    return {
+      thumb: { opp: q(clamp(pose.thumb.opp, 0, 95)) },
+      fingers: pose.fingers.map(f => ({
+        mcp: q(clamp(f.mcp, 0, 85)),
+        pip: q(clamp(f.pip, 0, 100)),
+        dip: q(clamp(f.dip, 0, 70))
+      }))
+    };
+  }
+  // 5 DOF：每指只有一个屈曲通道（集中在 MCP），其余关节固定
+  return {
+    thumb: { opp: q(clamp(pose.thumb.opp * 0.7, 0, 80)) },
+    fingers: pose.fingers.map(f => {
+      const total = (f.mcp + f.pip * 0.8 + f.dip * 0.6) / 2.4;
+      return { mcp: q(clamp(total, 0, 92)), pip: 0, dip: 0 };
+    })
+  };
+}
+
+/* 六通道角度向量（用于误差与柱状图） */
+function channelsOf(pose) {
+  const arr = pose.fingers.map(f => (f.mcp + f.pip + f.dip) / 3);
+  arr.unshift(pose.thumb.opp);
+  return arr;
+}
+
+function evaluate(target, sim) {
+  const a = channelsOf(target), b = channelsOf(sim);
+  const errs = a.map((v, i) => Math.abs(v - b[i]));
+  const meanErr = errs.reduce((x, y) => x + y, 0) / errs.length;
+  return { score: clamp(100 * (1 - meanErr / 90), 0, 100), meanErr, errs, a, b };
+}
+
+/* ===================== 画布 ===================== */
+const cvA = $('cvA'), ctxA = cvA.getContext('2d');
+const cvB = $('cvB'), ctxB = cvB.getContext('2d');
+
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(r.width * dpr);
+  cv.height = Math.round(r.height * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w: r.width, h: r.height };
+}
+let sizeA = { w: 640, h: 480 }, sizeB = { w: 640, h: 480 };
+
+function drawA(landmarks) {
+  const { w, h } = sizeA;
+  ctxA.clearRect(0, 0, w, h);
+  if (!landmarks) return;
+  ctxA.save();
+  ctxA.lineWidth = 3; ctxA.lineCap = 'round';
+  ctxA.strokeStyle = 'rgba(56,189,248,.85)';
+  ctxA.shadowColor = 'rgba(56,189,248,.55)'; ctxA.shadowBlur = 8;
+  CONN.forEach(([i, j]) => {
+    const a = landmarks[i], b = landmarks[j];
+    ctxA.beginPath();
+    ctxA.moveTo(a.x * w, a.y * h);
+    ctxA.lineTo(b.x * w, b.y * h);
+    ctxA.stroke();
+  });
+  ctxA.shadowBlur = 0;
+  landmarks.forEach((p, i) => {
+    const r = i % 4 === 0 ? 5 : 3.4;
+    ctxA.beginPath();
+    ctxA.fillStyle = i === 0 ? '#fbbf24' : '#e6ebf2';
+    ctxA.arc(p.x * w, p.y * h, r, 0, Math.PI * 2);
+    ctxA.fill();
+  });
+  ctxA.restore();
+}
+
+function drawB() {
+  const { w, h } = sizeB;
+  ctxB.clearRect(0, 0, w, h);
+
+  // 网格底纹
+  ctxB.save();
+  ctxB.strokeStyle = 'rgba(255,255,255,.028)';
+  ctxB.lineWidth = 1;
+  for (let x = 0; x < w; x += 32) { ctxB.beginPath(); ctxB.moveTo(x, 0); ctxB.lineTo(x, h); ctxB.stroke(); }
+  for (let y = 0; y < h; y += 32) { ctxB.beginPath(); ctxB.moveTo(0, y); ctxB.lineTo(w, y); ctxB.stroke(); }
+  ctxB.restore();
+
+  if (state.targets) {
+    drawHand(ctxB, w, h, state.targets, { color: 'rgba(154,166,182,.55)', width: 2, dashed: true, alpha: .9 });
+  }
+  if (state.sim) {
+    ctxB.save();
+    ctxB.shadowColor = 'rgba(167,139,250,.55)';
+    ctxB.shadowBlur = 14;
+    drawHand(ctxB, w, h, state.sim, { color: '#a78bfa', width: 4 });
+    ctxB.restore();
+  }
+}
+
+/* ===================== UI 更新 ===================== */
+function buildChannels() {
+  const box = $('channels');
+  box.innerHTML = CHANNEL_NAMES.map((n, i) => `
+    <div class="ch">
+      <span class="name">${n}</span>
+      <span class="track"><span class="fillA" id="fa${i}" style="width:0%"></span><span class="fillB" id="fb${i}" style="width:0%"></span></span>
+      <span class="val" id="v${i}">--</span>
+    </div>`).join('');
+}
+buildChannels();
+
+function gradeOf(s) {
+  if (s >= 85) return { text: '优 · 拟合良好', color: 'var(--green)', bg: 'rgba(34,197,94,.14)' };
+  if (s >= 70) return { text: '良 · 基本可用', color: 'var(--amber)', bg: 'rgba(245,158,11,.14)' };
+  if (s >= 60) return { text: '合格 · 需改进', color: '#f97316', bg: 'rgba(249,115,22,.14)' };
+  return { text: '不合格 · 表达力不足', color: 'var(--red)', bg: 'rgba(239,68,68,.14)' };
+}
+
+function updateUI() {
+  const ev = state.evalRes;
+  if (!ev) return;
+  const num = $('scoreNum'), g = $('grade');
+  num.innerHTML = ev.score.toFixed(1) + '<small>/100</small>';
+  const gi = gradeOf(ev.score);
+  num.style.color = gi.color;
+  g.textContent = gi.text; g.style.color = gi.color; g.style.background = gi.bg;
+
+  for (let i = 0; i < 6; i++) {
+    const a = ev.a[i], b = ev.b[i], e = ev.errs[i];
+    $('fa' + i).style.width = clamp(a / 150 * 100, 0, 100) + '%';
+    $('fb' + i).style.width = clamp(b / 150 * 100, 0, 100) + '%';
+    $('v' + i).innerHTML = `${a.toFixed(0)}° / ${b.toFixed(0)}°<em> ${e > 0.5 ? '+' + e.toFixed(0) : ''}</em>`;
+  }
+  $('fps').textContent = state.fps.toFixed(0);
+  $('conf').textContent = state.conf ? (state.conf * 100).toFixed(0) + '%' : '--';
+  $('latency').textContent = state.latency.toFixed(0);
+}
+
+/* ===================== 主循环 ===================== */
+let lastT = performance.now(), frames = 0, fpsT = lastT;
+
+async function loop() {
+  const now = performance.now();
+  frames++;
+  if (now - fpsT > 500) {
+    state.fps = frames * 1000 / (now - fpsT);
+    frames = 0; fpsT = now;
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function pushFrame(targetPose) {
+  state.targets = targetPose;
+  const sim = mapToSim(targetPose);
+  state.sim = sim;
+  state.evalRes = evaluate(targetPose, sim);
+  state.score = state.evalRes.score;
+  state.meanErr = state.evalRes.meanErr;
+  drawB();
+  updateUI();
+}
+
+/* ===================== 演示模式 ===================== */
+let demoTimer = null, demoT = 0;
+function startDemo() {
+  stopCamera(true);
+  state.mode = 'demo'; state.running = true;
+  $('noteA').style.display = 'none';
+  $('tagA').style.display = 'block';
+  $('tagA').textContent = '演示模式 · 合成手势数据';
+  $('srcLabel').textContent = '合成';
+  $('hintA').textContent = '演示模式';
+  $('statusDot').classList.remove('off');
+  $('stageA').classList.add('no-flip');
+  $('btnDemo').classList.add('primary'); $('btnCam').classList.remove('primary');
+
+  clearInterval(demoTimer);
+  demoTimer = setInterval(() => {
+    demoT += 0.028;
+    // 合成一只手：五指屈曲角按不同相位变化，形成张开—握拳—比心的循环
+    const w = (Math.sin(demoT) + 1) / 2;                  // 0..1 握拳程度
+    const fingers = [0, 1, 2, 3].map(i => {
+      const k = 0.85 + 0.15 * Math.sin(demoT * 1.3 + i * 0.7);
+      return {
+        mcp: 95 * w * k,
+        pip: 122 * w * k,
+        dip: 78 * w * k
+      };
+    });
+    const opp = 25 + 85 * Math.max(0, Math.sin(demoT * 0.9));
+    pushFrame({ thumb: { opp }, fingers });
+    state.conf = 0.99;
+    // A 窗口用同一姿态绘制骨架
+    const { w: W, h: H } = sizeA;
+    ctxA.clearRect(0, 0, W, H);
+    drawHand(ctxA, W, H, { thumb: { opp }, fingers }, { color: 'rgba(56,189,248,.9)', width: 3.5 });
+    state.latency = 6 + Math.random() * 4;
+  }, 33);
+}
+
+/* ===================== 摄像头 + MediaPipe ===================== */
+let stream = null, video = $('video'), hands = null, camLoop = null, lastHandTs = 0;
+
+async function startCamera() {
+  stopDemo();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false
+    });
+  } catch (err) {
+    alert('无法打开摄像头：' + (err.name || err) + '\n\n可以先用「演示模式」看效果；若摄像头被浏览器拦截，请在文件所在目录执行：\npython -m http.server 8000\n然后访问 http://localhost:8000/打开本页');
+    return;
+  }
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  state.mode = 'cam'; state.running = true;
+  $('stageA').classList.remove('no-flip');
+  $('noteA').style.display = 'none';
+  $('srcLabel').textContent = '摄像头';
+  $('hintA').textContent = '识别中…';
+  $('statusDot').classList.remove('off');
+  $('btnCam').classList.add('primary'); $('btnDemo').classList.remove('primary');
+
+  try {
+    await ensureHands();
+  } catch (e) {
+    $('hintA').textContent = '模型加载失败，已转演示模式';
+    startDemo();
+    return;
+  }
+  runCamLoop();
+}
+
+function ensureHands() {
+  if (hands) return Promise.resolve(hands);
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = () => {
+      try {
+        const H = window.Hands;
+        hands = new H({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+        hands.onResults(onResults);
+        resolve(hands);
+      } catch (e) { reject(e); }
+    };
+    s.onerror = () => reject(new Error('mediapipe cdn blocked'));
+    document.head.appendChild(s);
+  });
+}
+
+function onResults(res) {
+  const t0 = performance.now();
+  const { w, h } = sizeA;
+  const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
+  ctxA.clearRect(0, 0, w, h);
+  if (!lm) {
+    if (performance.now() - lastHandTs > 1500) $('hintA').textContent = '未检测到手，请把手掌正对镜头';
+    return;
+  }
+  lastHandTs = performance.now();
+  $('hintA').textContent = '追踪中';
+  state.conf = res.multiHandedness?.[0]?.score ?? 0.9;
+  drawA(lm);
+  const aspect = (video.videoWidth || 640) / (video.videoHeight || 480);
+  const pose = poseFromLandmarks(lm, aspect);
+  pushFrame(pose);
+  state.latency = performance.now() - t0;
+}
+
+async function runCamLoop() {
+  if (camLoop) cancelAnimationFrame(camLoop);
+  const step = async () => {
+    if (state.mode !== 'cam' || !hands) return;
+    if (video.readyState >= 2) {
+      try { await hands.send({ image: video }); } catch (e) {}
+    }
+    camLoop = requestAnimationFrame(step);
+  };
+  camLoop = requestAnimationFrame(step);
+}
+
+function stopCamera(silent) {
+  if (camLoop) { cancelAnimationFrame(camLoop); camLoop = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  if (!silent) {
+    $('noteA').style.display = 'flex';
+    $('hintA').textContent = '已停止';
+    $('statusDot').classList.add('off');
+  }
+}
+function stopDemo() {
+  clearInterval(demoTimer); demoTimer = null;
+  state.mode = 'idle';
+}
+
+/* ===================== 控制交互 ===================== */
+$('btnCam').onclick = () => startCamera();
+$('btnDemo').onclick = () => startDemo();
+$('btnRecord').onclick = () => {
+  if (!state.evalRes) return;
+  const d = new Date();
+  const row = {
+    i: state.records.length + 1,
+    time: d.toLocaleTimeString('zh-CN', { hour12: false }),
+    dof: state.dof,
+    quant: state.quant,
+    score: state.evalRes.score,
+    err: state.evalRes.meanErr
+  };
+  state.records.push(row);
+  renderRecords();
+};
+$('btnCsv').onclick = () => {
+  if (!state.records.length) { alert('还没有记录，先做几个手势并点「记录一条」'); return; }
+  const head = '序号,时间,自由度,量化(度),拟合度,平均关节角误差(度)\n';
+  const body = state.records.map(r => [r.i, r.time, r.dof, r.quant, r.score.toFixed(2), r.err.toFixed(2)].join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + head + body], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '灵巧手拟合度记录_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+function renderRecords() {
+  const tb = $('recBody');
+  $('recCount').textContent = state.records.length + ' 条';
+  if (!state.records.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty">还没有记录，调整到手势稳定后点「记录一条」</td></tr>';
+    return;
+  }
+  tb.innerHTML = state.records.slice().reverse().map(r => {
+    const cls = r.score >= 85 ? 'ok' : r.score >= 70 ? 'mid' : 'bad';
+    return `<tr><td>${r.i}</td><td>${r.time}</td><td>${r.dof} DOF</td><td>${r.quant}°</td>
+      <td class="${cls}">${r.score.toFixed(1)}</td><td>${r.err.toFixed(1)}°</td></tr>`;
+  }).join('');
+}
+
+$('segDof').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.dof = +b.dataset.dof;
+  [...$('segDof').children].forEach(x => x.classList.toggle('on', x === b));
+  $('dofLabel').textContent = state.dof + ' DOF';
+  $('hintB').textContent = state.dof === 6 ? '6 自由度映射（每指 3 关节）' : '5 自由度映射（每指 1 关节）';
+};
+$('quant').oninput = e => {
+  state.quant = +e.target.value;
+  $('quantV').textContent = state.quant + '°';
+};
+$('smooth').oninput = e => {
+  state.smooth = +e.target.value / 100;
+  $('smoothV').textContent = state.smooth.toFixed(2);
+};
+
+/* ===================== 初始化 ===================== */
+function resizeAll() {
+  sizeA = fitCanvas(cvA);
+  sizeB = fitCanvas(cvB);
+  drawB();
+  if (state.mode === 'demo' && state.targets) {
+    const { w, h } = sizeA;
+    ctxA.clearRect(0, 0, w, h);
+    drawHand(ctxA, w, h, state.targets, { color: 'rgba(56,189,248,.9)', width: 3.5 });
+  }
+}
+window.addEventListener('resize', resizeAll);
+setTimeout(() => { resizeAll(); startDemo(); }, 120);
+</script>
+</body>
+</html>
